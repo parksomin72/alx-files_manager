@@ -165,19 +165,19 @@ export default class FilesController {
    * @param {Response} res The Express response object.
    */
   static async getIndex(req, res) {
-  const { user } = req;
-  const parentId = req.query.parentId || ROOT_FOLDER_ID.toString();
-  const page = Number.isInteger(parseInt(req.query.page)) ? parseInt(req.query.page, 10) : 0;
+    const { user } = req;
+    const parentId = req.query.parentId || ROOT_FOLDER_ID.toString();
+    const page = /\d+/.test((req.query.page || '').toString())
+      ? Number.parseInt(req.query.page, 10)
+      : 0;
+    const filesFilter = {
+      userId: user._id,
+      parentId: parentId === ROOT_FOLDER_ID.toString()
+        ? parentId
+        : new mongoDBCore.BSON.ObjectId(isValidId(parentId) ? parentId : NULL_ID),
+    };
 
-  const filesFilter = {
-    userId: user._id, 
-    parentId: parentId === ROOT_FOLDER_ID.toString()
-      ? parentId
-      : new mongoDBCore.BSON.ObjectId(isValidId(parentId) ? parentId : NULL_ID),
-  };
-
-  try {
-    const files = await (await dbClient.filesCollection())
+    const files = await (await (await dbClient.filesCollection())
       .aggregate([
         { $match: filesFilter },
         { $sort: { _id: -1 } },
@@ -185,6 +185,7 @@ export default class FilesController {
         { $limit: MAX_FILES_PER_PAGE },
         {
           $project: {
+            _id: 0,
             id: '$_id',
             userId: '$userId',
             name: '$name',
@@ -195,13 +196,9 @@ export default class FilesController {
             },
           },
         },
-      ])
-      .toArray();
+      ])).toArray();
     res.status(200).json(files);
-  } catch (error) {
-    res.status(500).json({ error: 'Internal Server Error' });
   }
-}
 
   static async putPublish(req, res) {
     const { user } = req;
